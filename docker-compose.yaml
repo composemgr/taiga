@@ -19,8 +19,8 @@ services:
     environment:
       TZ: ${TZ:-America/New_York}
     volumes:
-      - ./rootfs/data/taiga:/data
-      - ./rootfs/config/taiga:/config
+      - ./volumes/data/taiga:/data
+      - ./volumes/config/taiga:/config
     depends_on:
       - taiga-db
     healthcheck:
@@ -42,7 +42,7 @@ services:
       POSTGRES_USER: ${DB_USER_NAME:-taiga}
       POSTGRES_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
     volumes:
-      - ./rootfs/data/db/postgres/taiga:/var/lib/postgresql/data
+      - ./volumes/data/db/postgres/taiga:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 30s
