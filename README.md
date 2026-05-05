@@ -50,9 +50,9 @@ See `docker-compose.yaml` for complete list of configurable options.
 
 ## 📂 Volumes
 
-- `./rootfs/data/taiga` - Data storage
-- `./rootfs/config/taiga` - Data storage
-- `./rootfs/data/db/postgres/taiga` - Data storage
+- `./volumes/data/taiga` - Data storage
+- `./volumes/config/taiga` - Data storage
+- `./volumes/data/db/postgres/taiga` - Data storage
 
 ## 🔐 Security
 
