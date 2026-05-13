@@ -7,6 +7,22 @@ x-logging: &default-logging
     max-size: "5m"
     max-file: "1"
 
+x-environment-back: &default-back-environment
+  TZ: ${TZ:-America/New_York}
+  POSTGRES_DB: ${DB_CREATE_DATABASE_NAME:-taiga}
+  POSTGRES_USER: ${DB_USER_NAME:-taiga}
+  POSTGRES_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
+  POSTGRES_HOST: taiga-db
+  TAIGA_SECRET_KEY: ${APP_SECRET_KEY:-changeme_secret_key_min_32_chars}
+  TAIGA_SITES_DOMAIN: ${BASE_HOST_NAME:-localhost}:8076
+  TAIGA_SITES_SCHEME: http
+  TAIGA_SUBPATH: ""
+  ENABLE_TELEMETRY: "False"
+  RABBITMQ_USER: ${DB_USER_NAME:-taiga}
+  RABBITMQ_PASS: ${DB_USER_PASS:-changeme_db_password}
+  RABBITMQ_VHOST: ${DB_CREATE_DATABASE_NAME:-taiga}
+  RABBITMQ_HOST: taiga-async-rabbitmq
+
 services:
   taiga-front:
     image: taigaio/taiga-front:latest
@@ -61,26 +77,34 @@ services:
     networks:
       - taiga
     environment:
-      TZ: ${TZ:-America/New_York}
-      POSTGRES_DB: ${DB_CREATE_DATABASE_NAME:-taiga}
-      POSTGRES_USER: ${DB_USER_NAME:-taiga}
-      POSTGRES_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
-      POSTGRES_HOST: taiga-db
-      TAIGA_SECRET_KEY: ${APP_SECRET_KEY:-changeme_secret_key_min_32_chars}
-      TAIGA_SITES_DOMAIN: ${BASE_HOST_NAME:-localhost}:8076
-      TAIGA_SITES_SCHEME: http
-      ENABLE_TELEMETRY: "False"
-      RABBITMQ_USER: ${DB_USER_NAME:-taiga}
-      RABBITMQ_PASS: ${DB_USER_PASS:-changeme_db_password}
-      RABBITMQ_VHOST: ${DB_CREATE_DATABASE_NAME:-taiga}
-      RABBITMQ_HOST: taiga-rabbit
+      <<: *default-back-environment
       CONTAINER_NAME: taiga-back
     volumes:
       - ./volumes/data/taiga/static:/taiga-back/static
       - ./volumes/data/taiga/media:/taiga-back/media
     depends_on:
       - taiga-db
-      - taiga-rabbit
+      - taiga-async-rabbitmq
+      - taiga-events-rabbitmq
+
+  taiga-async:
+    image: taigaio/taiga-back:latest
+    pull_policy: always
+    container_name: taiga-async
+    restart: always
+    logging: *default-logging
+    entrypoint: ["/taiga-back/docker/async_entrypoint.sh"]
+    networks:
+      - taiga
+    environment:
+      <<: *default-back-environment
+      CONTAINER_NAME: taiga-async
+    volumes:
+      - ./volumes/data/taiga/static:/taiga-back/static
+      - ./volumes/data/taiga/media:/taiga-back/media
+    depends_on:
+      - taiga-db
+      - taiga-async-rabbitmq
 
   taiga-events:
     image: taigaio/taiga-events:latest
@@ -95,16 +119,16 @@ services:
       RABBITMQ_USER: ${DB_USER_NAME:-taiga}
       RABBITMQ_PASS: ${DB_USER_PASS:-changeme_db_password}
       RABBITMQ_VHOST: ${DB_CREATE_DATABASE_NAME:-taiga}
-      RABBITMQ_HOST: taiga-rabbit
+      RABBITMQ_HOST: taiga-events-rabbitmq
       TAIGA_SECRET_KEY: ${APP_SECRET_KEY:-changeme_secret_key_min_32_chars}
       CONTAINER_NAME: taiga-events
     depends_on:
-      - taiga-rabbit
+      - taiga-events-rabbitmq
 
-  taiga-rabbit:
+  taiga-async-rabbitmq:
     image: rabbitmq:alpine
     pull_policy: always
-    container_name: taiga-rabbit
+    container_name: taiga-async-rabbitmq
     restart: always
     logging: *default-logging
     networks:
@@ -114,7 +138,26 @@ services:
       RABBITMQ_DEFAULT_USER: ${DB_USER_NAME:-taiga}
       RABBITMQ_DEFAULT_PASS: ${DB_USER_PASS:-changeme_db_password}
       RABBITMQ_DEFAULT_VHOST: ${DB_CREATE_DATABASE_NAME:-taiga}
-      CONTAINER_NAME: taiga-rabbit
+      CONTAINER_NAME: taiga-async-rabbitmq
+    volumes:
+      - ./volumes/data/taiga/async-rabbitmq:/var/lib/rabbitmq
+
+  taiga-events-rabbitmq:
+    image: rabbitmq:alpine
+    pull_policy: always
+    container_name: taiga-events-rabbitmq
+    restart: always
+    logging: *default-logging
+    networks:
+      - taiga
+    environment:
+      TZ: ${TZ:-America/New_York}
+      RABBITMQ_DEFAULT_USER: ${DB_USER_NAME:-taiga}
+      RABBITMQ_DEFAULT_PASS: ${DB_USER_PASS:-changeme_db_password}
+      RABBITMQ_DEFAULT_VHOST: ${DB_CREATE_DATABASE_NAME:-taiga}
+      CONTAINER_NAME: taiga-events-rabbitmq
+    volumes:
+      - ./volumes/data/taiga/events-rabbitmq:/var/lib/rabbitmq
 
   taiga-db:
     image: postgres:latest
