@@ -70,9 +70,9 @@ services:
       TAIGA_SITES_DOMAIN: ${BASE_HOST_NAME:-localhost}:8076
       TAIGA_SITES_SCHEME: http
       ENABLE_TELEMETRY: "False"
-      RABBITMQ_USER: ${RABBITMQ_USER:-taiga}
-      RABBITMQ_PASS: ${RABBITMQ_PASS:-changeme_db_password}
-      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-taiga}
+      RABBITMQ_USER: ${DB_USER_NAME:-taiga}
+      RABBITMQ_PASS: ${DB_USER_PASS:-changeme_db_password}
+      RABBITMQ_VHOST: ${DB_CREATE_DATABASE_NAME:-taiga}
       RABBITMQ_HOST: taiga-rabbit
       CONTAINER_NAME: taiga-back
     volumes:
@@ -92,9 +92,9 @@ services:
       - taiga
     environment:
       TZ: ${TZ:-America/New_York}
-      RABBITMQ_USER: ${RABBITMQ_USER:-taiga}
-      RABBITMQ_PASS: ${RABBITMQ_PASS:-changeme_db_password}
-      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-taiga}
+      RABBITMQ_USER: ${DB_USER_NAME:-taiga}
+      RABBITMQ_PASS: ${DB_USER_PASS:-changeme_db_password}
+      RABBITMQ_VHOST: ${DB_CREATE_DATABASE_NAME:-taiga}
       RABBITMQ_HOST: taiga-rabbit
       TAIGA_SECRET_KEY: ${APP_SECRET_KEY:-changeme_secret_key_min_32_chars}
       CONTAINER_NAME: taiga-events
@@ -111,9 +111,9 @@ services:
       - taiga
     environment:
       TZ: ${TZ:-America/New_York}
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-taiga}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-changeme_db_password}
-      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-taiga}
+      RABBITMQ_DEFAULT_USER: ${DB_USER_NAME:-taiga}
+      RABBITMQ_DEFAULT_PASS: ${DB_USER_PASS:-changeme_db_password}
+      RABBITMQ_DEFAULT_VHOST: ${DB_CREATE_DATABASE_NAME:-taiga}
       CONTAINER_NAME: taiga-rabbit
 
   taiga-db:
