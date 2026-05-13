@@ -17,6 +17,8 @@ services:
     logging: *default-logging
     networks:
       - taiga
+      - proxy
+      - cloudflare
     ports:
       - "172.17.0.1:8076:80"
     environment:
@@ -24,6 +26,8 @@ services:
       TAIGA_URL: http://${BASE_HOST_NAME:-localhost}:8076
       TAIGA_WEBSOCKETS_URL: ws://${BASE_HOST_NAME:-localhost}:8076
       TAIGA_SUBPATH: ""
+      CONTAINER_NAME: taiga-front
+      HOSTNAME: ${BASE_HOST_NAME:-$HOSTNAME}
     depends_on:
       - taiga-back
     healthcheck:
@@ -31,6 +35,22 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    labels:
+      - 'traefik.enable=true'
+      - 'cloudflare.enable=true'
+      - 'traefik.docker.network=proxy'
+      - 'cloudflare.service=http://taiga-front:80'
+      - 'cloudflare.hostname=taiga.${CLOUDFLARE_ZONE_NAME:-}'
+      - 'traefik.http.routers.taiga-front.entrypoints=http'
+      - 'traefik.http.routers.taiga-front-secure.tls=true'
+      - 'traefik.http.routers.taiga-front.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
+      - 'traefik.http.middlewares.taiga-front-https-redirect.redirectscheme.scheme=https'
+      - 'traefik.http.routers.taiga-front.middlewares=taiga-front-https-redirect'
+      - 'traefik.http.routers.taiga-front-secure.entrypoints=https'
+      - 'traefik.http.routers.taiga-front-secure.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
+      - 'traefik.http.routers.taiga-front-secure.tls.certresolver=cloudflare'
+      - 'traefik.http.routers.taiga-front-secure.service=taiga-front'
+      - 'traefik.http.services.taiga-front.loadbalancer.server.port=80'
 
   taiga-back:
     image: taigaio/taiga-back:latest
@@ -54,6 +74,7 @@ services:
       RABBITMQ_PASS: ${RABBITMQ_PASS:-changeme_db_password}
       RABBITMQ_VHOST: ${RABBITMQ_VHOST:-taiga}
       RABBITMQ_HOST: taiga-rabbit
+      CONTAINER_NAME: taiga-back
     volumes:
       - ./volumes/data/taiga/static:/taiga-back/static
       - ./volumes/data/taiga/media:/taiga-back/media
@@ -76,6 +97,7 @@ services:
       RABBITMQ_VHOST: ${RABBITMQ_VHOST:-taiga}
       RABBITMQ_HOST: taiga-rabbit
       TAIGA_SECRET_KEY: ${APP_SECRET_KEY:-changeme_secret_key_min_32_chars}
+      CONTAINER_NAME: taiga-events
     depends_on:
       - taiga-rabbit
 
@@ -92,6 +114,7 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-taiga}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-changeme_db_password}
       RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-taiga}
+      CONTAINER_NAME: taiga-rabbit
 
   taiga-db:
     image: postgres:latest
@@ -106,6 +129,7 @@ services:
       POSTGRES_DB: ${DB_CREATE_DATABASE_NAME:-taiga}
       POSTGRES_USER: ${DB_USER_NAME:-taiga}
       POSTGRES_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
+      CONTAINER_NAME: taiga-db
     volumes:
       - ./volumes/data/db/postgres/taiga:/var/lib/postgresql/data
     healthcheck:
@@ -118,3 +142,7 @@ networks:
   taiga:
     name: taiga
     external: false
+  proxy:
+    external: true
+  cloudflare:
+    external: true
