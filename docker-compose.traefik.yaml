@@ -1,0 +1,114 @@
+name: taiga
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
+
+services:
+  app:
+    image: casjaysdevdocker/taiga:latest
+    container_name: taiga-app
+    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    environment:
+      TZ: ${TZ:-America/New_York}
+      CONTAINER_NAME: taiga-app
+      HOSTNAME: ${BASE_HOST_NAME:-$HOSTNAME}
+      TAIGA_SITES_SCHEME: https
+      TAIGA_SITES_DOMAIN: ${BASE_HOST_NAME:-$HOSTNAME}
+      TAIGA_SECRET_KEY: ${APP_SECRET_TOKEN_64:-}
+      TAIGA_ADMIN_USERNAME: ${APP_ADMIN_USER:-admin}
+      TAIGA_ADMIN_EMAIL: ${APP_ADMIN_EMAIL:-admin@${BASE_DOMAIN_NAME:-example.com}}
+      TAIGA_ADMIN_PASSWORD: ${APP_ADMIN_PASS:-replace-with-a-random-password}
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${DB_CREATE_DATABASE_NAME:-taiga}
+      POSTGRES_USER: ${DB_USER_NAME:-taiga}
+      POSTGRES_PASSWORD: ${DB_USER_PASS:-replace-with-a-random-password}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: taiga
+      RABBITMQ_VHOST: taiga
+      RABBITMQ_PASS: ${APP_RABBITMQ_PASS:-replace-with-a-random-password}
+      SESSION_COOKIE_SECURE: 'true'
+      CSRF_COOKIE_SECURE: 'true'
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-console}
+      EMAIL_HOST: ${EMAIL_SERVER_HOST:-172.17.0.1}
+      EMAIL_PORT: ${EMAIL_SERVER_PORT:-25}
+      DEFAULT_FROM_EMAIL: ${EMAIL_SERVER_MAIL_FROM:-no-reply@${BASE_HOST_NAME:-$HOSTNAME}}
+    volumes:
+      - './volumes/config/taiga:/config:z'
+      - './volumes/data/taiga:/data:z'
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.docker.network=traefik'
+      - 'traefik.http.routers.taiga-app.entrypoints=http'
+      - 'traefik.http.routers.taiga-app.rule=Host(`${BASE_HOST_NAME:-$HOSTNAME}`)'
+      - 'traefik.http.routers.taiga-app.middlewares=taiga-app-https-redirect'
+      - 'traefik.http.middlewares.taiga-app-https-redirect.redirectscheme.scheme=https'
+      - 'traefik.http.routers.taiga-app-secure.entrypoints=https'
+      - 'traefik.http.routers.taiga-app-secure.rule=Host(`${BASE_HOST_NAME:-$HOSTNAME}`)'
+      - 'traefik.http.routers.taiga-app-secure.tls.certresolver=cloudflare'
+      - 'traefik.http.routers.taiga-app-secure.service=taiga-app'
+      - 'traefik.http.services.taiga-app.loadbalancer.server.port=80'
+    networks:
+      - taiga
+      - traefik
+  db:
+    image: postgres:latest
+    container_name: taiga-db
+    hostname: db
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    environment:
+      TZ: ${TZ:-America/New_York}
+      CONTAINER_NAME: taiga-db
+      POSTGRES_DB: ${DB_CREATE_DATABASE_NAME:-taiga}
+      POSTGRES_USER: ${DB_USER_NAME:-taiga}
+      POSTGRES_PASSWORD: ${DB_USER_PASS:-replace-with-a-random-password}
+    volumes:
+      - './volumes/db/postgres/taiga:/var/lib/postgresql:z'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER_NAME:-taiga} -d ${DB_CREATE_DATABASE_NAME:-taiga}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - taiga
+  rabbitmq:
+    image: rabbitmq:3-alpine
+    container_name: taiga-rabbitmq
+    hostname: rabbitmq
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    environment:
+      TZ: ${TZ:-America/New_York}
+      CONTAINER_NAME: taiga-rabbitmq
+      RABBITMQ_DEFAULT_USER: taiga
+      RABBITMQ_DEFAULT_PASS: ${APP_RABBITMQ_PASS:-replace-with-a-random-password}
+      RABBITMQ_DEFAULT_VHOST: taiga
+    volumes:
+      - './volumes/data/rabbitmq/taiga:/var/lib/rabbitmq:z'
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - taiga
+
+networks:
+  taiga:
+    name: taiga
+    external: false
+  traefik:
+    name: traefik
+    external: true

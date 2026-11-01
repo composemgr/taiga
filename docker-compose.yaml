@@ -1,191 +1,102 @@
-# nginx proxy address - http://172.17.0.1:8076
+# nginx proxy address - http://172.17.0.1:64361
 
 name: taiga
 x-logging: &default-logging
-  driver: json-file
   options:
-    max-size: "5m"
-    max-file: "1"
-
-x-environment-back: &default-back-environment
-  TZ: ${TZ:-America/New_York}
-  POSTGRES_DB: ${DB_CREATE_DATABASE_NAME:-taiga}
-  POSTGRES_USER: ${DB_USER_NAME:-taiga}
-  POSTGRES_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
-  POSTGRES_HOST: taiga-db
-  TAIGA_SECRET_KEY: ${APP_SECRET_KEY:-changeme_secret_key_min_32_chars}
-  TAIGA_SITES_DOMAIN: ${BASE_HOST_NAME:-localhost}:8076
-  TAIGA_SITES_SCHEME: http
-  TAIGA_SUBPATH: ""
-  ENABLE_TELEMETRY: "False"
-  RABBITMQ_USER: ${DB_USER_NAME:-taiga}
-  RABBITMQ_PASS: ${DB_USER_PASS:-changeme_db_password}
-  RABBITMQ_VHOST: ${DB_CREATE_DATABASE_NAME:-taiga}
-  RABBITMQ_HOST: taiga-async-rabbitmq
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
 
 services:
-  taiga-front:
-    image: taigaio/taiga-front:latest
-    pull_policy: always
-    container_name: taiga-front
+  app:
+    image: casjaysdevdocker/taiga:latest
+    container_name: taiga-app
     hostname: ${BASE_HOST_NAME:-$HOSTNAME}
     restart: always
+    pull_policy: always
     logging: *default-logging
-    networks:
-      - taiga
-      - proxy
-      - cloudflare
-    ports:
-      - "172.17.0.1:8076:80"
     environment:
       TZ: ${TZ:-America/New_York}
-      TAIGA_URL: http://${BASE_HOST_NAME:-localhost}:8076
-      TAIGA_WEBSOCKETS_URL: ws://${BASE_HOST_NAME:-localhost}:8076
-      TAIGA_SUBPATH: ""
-      CONTAINER_NAME: taiga-front
+      CONTAINER_NAME: taiga-app
       HOSTNAME: ${BASE_HOST_NAME:-$HOSTNAME}
-    depends_on:
-      - taiga-back
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    labels:
-      - 'traefik.enable=true'
-      - 'cloudflare.enable=true'
-      - 'traefik.docker.network=proxy'
-      - 'cloudflare.service=http://taiga-front:80'
-      - 'cloudflare.hostname=taiga.${CLOUDFLARE_ZONE_NAME:-}'
-      - 'traefik.http.routers.taiga-front.entrypoints=http'
-      - 'traefik.http.routers.taiga-front-secure.tls=true'
-      - 'traefik.http.routers.taiga-front.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
-      - 'traefik.http.middlewares.taiga-front-https-redirect.redirectscheme.scheme=https'
-      - 'traefik.http.routers.taiga-front.middlewares=taiga-front-https-redirect'
-      - 'traefik.http.routers.taiga-front-secure.entrypoints=https'
-      - 'traefik.http.routers.taiga-front-secure.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
-      - 'traefik.http.routers.taiga-front-secure.tls.certresolver=cloudflare'
-      - 'traefik.http.routers.taiga-front-secure.service=taiga-front'
-      - 'traefik.http.services.taiga-front.loadbalancer.server.port=80'
-
-  taiga-back:
-    image: taigaio/taiga-back:latest
-    pull_policy: always
-    container_name: taiga-back
-    restart: always
-    logging: *default-logging
-    networks:
-      - taiga
-    environment:
-      <<: *default-back-environment
-      CONTAINER_NAME: taiga-back
-    volumes:
-      - ./volumes/data/taiga/static:/taiga-back/static
-      - ./volumes/data/taiga/media:/taiga-back/media
-    depends_on:
-      - taiga-db
-      - taiga-async-rabbitmq
-      - taiga-events-rabbitmq
-
-  taiga-async:
-    image: taigaio/taiga-back:latest
-    pull_policy: always
-    container_name: taiga-async
-    restart: always
-    logging: *default-logging
-    entrypoint: ["/taiga-back/docker/async_entrypoint.sh"]
-    networks:
-      - taiga
-    environment:
-      <<: *default-back-environment
-      CONTAINER_NAME: taiga-async
-    volumes:
-      - ./volumes/data/taiga/static:/taiga-back/static
-      - ./volumes/data/taiga/media:/taiga-back/media
-    depends_on:
-      - taiga-db
-      - taiga-async-rabbitmq
-
-  taiga-events:
-    image: taigaio/taiga-events:latest
-    pull_policy: always
-    container_name: taiga-events
-    restart: always
-    logging: *default-logging
-    networks:
-      - taiga
-    environment:
-      TZ: ${TZ:-America/New_York}
-      RABBITMQ_USER: ${DB_USER_NAME:-taiga}
-      RABBITMQ_PASS: ${DB_USER_PASS:-changeme_db_password}
-      RABBITMQ_VHOST: ${DB_CREATE_DATABASE_NAME:-taiga}
-      RABBITMQ_HOST: taiga-events-rabbitmq
-      TAIGA_SECRET_KEY: ${APP_SECRET_KEY:-changeme_secret_key_min_32_chars}
-      CONTAINER_NAME: taiga-events
-    depends_on:
-      - taiga-events-rabbitmq
-
-  taiga-async-rabbitmq:
-    image: rabbitmq:alpine
-    pull_policy: always
-    container_name: taiga-async-rabbitmq
-    restart: always
-    logging: *default-logging
-    networks:
-      - taiga
-    environment:
-      TZ: ${TZ:-America/New_York}
-      RABBITMQ_DEFAULT_USER: ${DB_USER_NAME:-taiga}
-      RABBITMQ_DEFAULT_PASS: ${DB_USER_PASS:-changeme_db_password}
-      RABBITMQ_DEFAULT_VHOST: ${DB_CREATE_DATABASE_NAME:-taiga}
-      CONTAINER_NAME: taiga-async-rabbitmq
-    volumes:
-      - ./volumes/data/taiga/async-rabbitmq:/var/lib/rabbitmq
-
-  taiga-events-rabbitmq:
-    image: rabbitmq:alpine
-    pull_policy: always
-    container_name: taiga-events-rabbitmq
-    restart: always
-    logging: *default-logging
-    networks:
-      - taiga
-    environment:
-      TZ: ${TZ:-America/New_York}
-      RABBITMQ_DEFAULT_USER: ${DB_USER_NAME:-taiga}
-      RABBITMQ_DEFAULT_PASS: ${DB_USER_PASS:-changeme_db_password}
-      RABBITMQ_DEFAULT_VHOST: ${DB_CREATE_DATABASE_NAME:-taiga}
-      CONTAINER_NAME: taiga-events-rabbitmq
-    volumes:
-      - ./volumes/data/taiga/events-rabbitmq:/var/lib/rabbitmq
-
-  taiga-db:
-    image: postgres:latest
-    pull_policy: always
-    container_name: taiga-db
-    restart: always
-    logging: *default-logging
-    networks:
-      - taiga
-    environment:
-      TZ: ${TZ:-America/New_York}
+      TAIGA_SITES_SCHEME: https
+      TAIGA_SITES_DOMAIN: ${BASE_HOST_NAME:-$HOSTNAME}
+      TAIGA_SECRET_KEY: ${APP_SECRET_TOKEN_64:-}
+      TAIGA_ADMIN_USERNAME: ${APP_ADMIN_USER:-admin}
+      TAIGA_ADMIN_EMAIL: ${APP_ADMIN_EMAIL:-admin@${BASE_DOMAIN_NAME:-example.com}}
+      TAIGA_ADMIN_PASSWORD: ${APP_ADMIN_PASS:-replace-with-a-random-password}
+      POSTGRES_HOST: db
       POSTGRES_DB: ${DB_CREATE_DATABASE_NAME:-taiga}
       POSTGRES_USER: ${DB_USER_NAME:-taiga}
-      POSTGRES_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
-      CONTAINER_NAME: taiga-db
+      POSTGRES_PASSWORD: ${DB_USER_PASS:-replace-with-a-random-password}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: taiga
+      RABBITMQ_VHOST: taiga
+      RABBITMQ_PASS: ${APP_RABBITMQ_PASS:-replace-with-a-random-password}
+      SESSION_COOKIE_SECURE: 'true'
+      CSRF_COOKIE_SECURE: 'true'
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-console}
+      EMAIL_HOST: ${EMAIL_SERVER_HOST:-172.17.0.1}
+      EMAIL_PORT: ${EMAIL_SERVER_PORT:-25}
+      DEFAULT_FROM_EMAIL: ${EMAIL_SERVER_MAIL_FROM:-no-reply@${BASE_HOST_NAME:-$HOSTNAME}}
+    ports:
+      - '172.17.0.1:64361:80'
     volumes:
-      - ./volumes/data/db/postgres/taiga:/var/lib/postgresql/data
+      - './volumes/config/taiga:/config:z'
+      - './volumes/data/taiga:/data:z'
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - taiga
+  db:
+    image: postgres:latest
+    container_name: taiga-db
+    hostname: db
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    environment:
+      TZ: ${TZ:-America/New_York}
+      CONTAINER_NAME: taiga-db
+      POSTGRES_DB: ${DB_CREATE_DATABASE_NAME:-taiga}
+      POSTGRES_USER: ${DB_USER_NAME:-taiga}
+      POSTGRES_PASSWORD: ${DB_USER_PASS:-replace-with-a-random-password}
+    volumes:
+      - './volumes/db/postgres/taiga:/var/lib/postgresql:z'
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 30s
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER_NAME:-taiga} -d ${DB_CREATE_DATABASE_NAME:-taiga}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - taiga
+  rabbitmq:
+    image: rabbitmq:3-alpine
+    container_name: taiga-rabbitmq
+    hostname: rabbitmq
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    environment:
+      TZ: ${TZ:-America/New_York}
+      CONTAINER_NAME: taiga-rabbitmq
+      RABBITMQ_DEFAULT_USER: taiga
+      RABBITMQ_DEFAULT_PASS: ${APP_RABBITMQ_PASS:-replace-with-a-random-password}
+      RABBITMQ_DEFAULT_VHOST: taiga
+    volumes:
+      - './volumes/data/rabbitmq/taiga:/var/lib/rabbitmq:z'
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 15s
       timeout: 10s
-      retries: 3
+      retries: 10
+    networks:
+      - taiga
 
 networks:
   taiga:
     name: taiga
     external: false
-  proxy:
-    external: true
-  cloudflare:
-    external: true
