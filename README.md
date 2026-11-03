@@ -15,7 +15,7 @@ administrator run automatically on first start.
 
 ## 🚀 Services
 
-- **app**: casjaysdevdocker/taiga:latest (port 80)
+- **app**: taigaio/taiga-back, taiga-front, taiga-events, taiga-protected (official Taiga images) (port 80)
 - **db**: postgres:latest
 - **rabbitmq**: rabbitmq:3-alpine
 
